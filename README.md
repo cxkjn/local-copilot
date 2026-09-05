@@ -1,256 +1,163 @@
-# 🧰 AI Agent Service Toolkit
+# local-copilot
 
-[![build status](https://github.com/JoshuaC215/local-copilot/actions/workflows/test.yml/badge.svg)](https://github.com/JoshuaC215/local-copilot/actions/workflows/test.yml) [![codecov](https://codecov.io/github/JoshuaC215/local-copilot/graph/badge.svg?token=5MTJSYWD05)](https://codecov.io/github/JoshuaC215/local-copilot) [![Python Version](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2FJoshuaC215%2Flocal-copilot%2Frefs%2Fheads%2Fmain%2Fpyproject.toml)](https://github.com/JoshuaC215/local-copilot/blob/main/pyproject.toml)
-[![GitHub License](https://img.shields.io/github/license/JoshuaC215/local-copilot)](https://github.com/JoshuaC215/local-copilot/blob/main/LICENSE) [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_red.svg)](https://local-copilot.streamlit.app/)
+[![GitHub License](https://img.shields.io/github/license/cxkjn/local-copilot)](https://github.com/cxkjn/local-copilot/blob/main/LICENSE) [![Python Version](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2Fcxkjn%2Flocal-copilot%2Frefs%2Fheads%2Fmain%2Fpyproject.toml)](https://github.com/cxkjn/local-copilot/blob/main/pyproject.toml)
 
-A full toolkit for running an AI agent service built with LangGraph, FastAPI and Streamlit.
+local-copilot 是一个基于 [LangGraph](https://langchain-ai.github.io/langgraph/)、FastAPI 与 Streamlit 的本地代码助手服务。它把当前工作目录当作自己的代码仓库，可以读取、搜索、修改文件并运行命令，同时内置安全网关、人工确认（HITL）、路径越界拦截、记忆系统与长会话压缩，适合作为本地编程助手的可落地底座。
 
-It includes a [LangGraph](https://langchain-ai.github.io/langgraph/) agent, a [FastAPI](https://fastapi.tiangolo.com/) service to serve it, a client to interact with the service, and a [Streamlit](https://streamlit.io/) app that uses the client to provide a chat interface. Data structures and settings are built with [Pydantic](https://github.com/pydantic/pydantic).
+项目自带一个可交互的聊天界面（Streamlit），并提供流式/非流式 HTTP API，方便接入你自己的前端或其他工具。
 
-This project offers a template for you to easily build and run your own agents using the LangGraph framework. It demonstrates a complete setup from agent definition to user interface, making it easier to get started with LangGraph-based projects by providing a full, robust toolkit.
+## 功能特性
 
-**[🎥 Watch a video walkthrough of the repo and app](https://www.youtube.com/watch?v=pdYVHw_YCNY)**
+- **内置代码工具**：读文件、写文件、编辑、移动/复制/删除、列目录、内容搜索、运行 shell 命令，另有网页搜索（DuckDuckGo）与计算器；
+- **安全网关**：工具调用前统一做用户鉴权、内容黑名单、工具白名单检查；高危工具（写文件、删除、执行命令等）触发 `interrupt()` 人工确认；文件路径强制收敛在 `PROJECT_ROOT` 内，越界直接拒绝；
+- **记忆与持久规则**：偏好 / 反馈 / 知识 / 参考四类记忆，异步后台抽取；用户表达的“不要做 X”会记录为持久拒绝规则（Block Rule）并在后续请求中拦截；默认内存存储，配置 `REDIS_URL` 后可持久化；
+- **上下文压缩**：会话超过 `MAX_TOKEN_LIMIT` 时自动把早期历史压缩为摘要，保留最近若干轮原文；
+- **Plan-mode 任务拆解**：复杂请求自动拆分为相互独立的子任务并行执行，再汇总结果；
+- **MCP 工具扩展**：通过 `MCP_SERVERS_JSON` 接入外部 MCP Server，为 agent 动态扩展工具；
+- **完整服务端**：`/invoke`、`/stream`、`/history`、`/threads`、`/feedback`、`/info`、`/health` 与 AG-UI 协议端点，支持 Bearer Token 鉴权、Postgres / MongoDB / SQLite 多种检查点后端，以及 LangSmith / LangFuse 追踪；
+- **聊天界面与语音**：Streamlit 网页聊天，可选 OpenAI 语音输入/输出（客户端侧配置）；
+- **多种部署方式**：支持 Docker Compose 与本地 uv 虚拟环境两种运行方式。
 
-## Overview
+## 快速开始
 
-### [Try the app!](https://local-copilot.streamlit.app/)
+### 方式一：本地运行（uv）
 
-<a href="https://local-copilot.streamlit.app/"><img src="media/app_screenshot.png" width="600" alt="App screenshot"></a>
-
-### Quickstart
-
-Run directly in python
+至少需要配置一个 LLM API Key（如 `OPENAI_API_KEY`）：
 
 ```sh
-# At least one LLM API key is required
 echo 'OPENAI_API_KEY=your_openai_api_key' >> .env
 
-# uv is the recommended way to install local-copilot, but "pip install ." also works
-# For uv installation options, see: https://docs.astral.sh/uv/getting-started/installation/
-curl -LsSf https://astral.sh/uv/0.11.32/install.sh | sh
-
-# Install dependencies. "uv sync" creates .venv automatically
+# 安装依赖（uv sync 会自动创建 .venv）
 uv sync --frozen
 source .venv/bin/activate
-python src/run_service.py
 
-# In another shell
+# 启动 agent 服务（默认 http://localhost:8080）
+python src/run_service.py
+```
+
+另开一个终端启动聊天界面：
+
+```sh
 source .venv/bin/activate
 streamlit run src/streamlit_app.py
 ```
 
-Run with docker
+浏览器访问 `http://localhost:8501` 即可与 `code-assistant` 对话。
+
+### 方式二：Docker
+
+需要 Docker 与 Docker Compose（>= [v2.23.0](https://docs.docker.com/compose/release-notes/#2230)）：
 
 ```sh
 echo 'OPENAI_API_KEY=your_openai_api_key' >> .env
 docker compose watch
 ```
 
-### Architecture Diagram
+`docker compose watch` 会启动 Postgres、agent 服务与 Streamlit 应用，并在代码变更时自动热更新。API 文档见 `http://localhost:8080/redoc`。
 
-<img src="media/agent_architecture.png" width="600" alt="Agent architecture diagram">
+## HTTP API
 
-### Key Features
+统一使用 agent 标识 `code-assistant`（也是默认 agent），例如：
 
-1. **LangGraph Agent and latest features**: A customizable agent built using the LangGraph framework. Implements the latest LangGraph v1.0 features including human in the loop with `interrupt()`, flow control with `Command`, long-term memory with `Store`, and `langgraph-supervisor`.
-1. **FastAPI Service**: Serves the agent with both streaming and non-streaming endpoints.
-1. **Advanced Streaming**: A novel approach to support both token-based and message-based streaming.
-1. **AG-UI Protocol Support**: Every agent is also served over the [AG-UI protocol](https://docs.ag-ui.com) for connecting AG-UI compatible frontends like CopilotKit - see [docs](docs/AGUI.md).
-1. **Streamlit Interface**: Provides a user-friendly chat interface for interacting with the agent, including voice input and output.
-1. **Multiple Agent Support**: Run multiple agents in the service and call by URL path. Available agents and models are described in `/info`
-1. **Asynchronous Design**: Utilizes async/await for efficient handling of concurrent requests.
-1. **Content Moderation**: Implements Safeguard for content moderation (requires Groq API key).
-1. **RAG Agent**: A basic RAG agent implementation using ChromaDB - see [docs](docs/RAG_Assistant.md).
-1. **Chat History**: Lists a user's previous conversations per agent via `/threads`, with a "Previous Chats" sidebar in the Streamlit app.
-1. **Feedback Mechanism**: Includes a star-based feedback system integrated with LangSmith.
-1. **Docker Support**: Includes Dockerfiles and a docker compose file for easy development and deployment.
-1. **Testing**: Includes robust unit and integration tests for the full repo.
+```sh
+# 流式
+curl -N -X POST http://localhost:8080/code-assistant/stream \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"读一下 README.md 并总结","thread_id":"t1","user_id":"u1"}'
 
-### Key Files
+# 非流式
+curl -X POST http://localhost:8080/code-assistant/invoke \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"列出 src 目录结构","thread_id":"t1","user_id":"u1"}'
 
-The repository is structured as follows:
+# 历史 / 会话列表
+curl -X POST http://localhost:8080/code-assistant/history \
+  -H 'Content-Type: application/json' -d '{"thread_id":"t1","user_id":"u1"}'
+curl "http://localhost:8080/code-assistant/threads?user_id=u1"
+```
 
-- `src/agents/`: Defines several agents with different capabilities
-- `src/schema/`: Defines the protocol schema
-- `src/core/`: Core modules including LLM definition and settings
-- `src/service/service.py`: FastAPI service to serve the agents
-- `src/client/client.py`: Client to interact with the agent service
-- `src/streamlit_app.py`: Streamlit app providing a chat interface
-- `tests/`: Unit and integration tests
+查看可用 agent 与信息：
 
-## Setup and Usage
+```sh
+curl http://localhost:8080/info
+```
 
-1. Clone the repository:
+如果设置了 `AUTH_SECRET`，所有请求需携带请求头 `Authorization: Bearer <AUTH_SECRET>`。生产环境务必设置。
 
-   ```sh
-   git clone https://github.com/JoshuaC215/local-copilot.git
-   cd local-copilot
-   ```
-
-2. Set up environment variables:
-   Create a `.env` file in the root directory. At least one LLM API key or configuration is required. See the [`.env.example` file](./.env.example) for a full list of available environment variables, including a variety of model provider API keys, header-based authentication, LangSmith tracing, testing and development modes, and OpenWeatherMap API key.
-
-3. You can now run the agent service and the Streamlit app locally, either with Docker or just using Python. The Docker setup is recommended for simpler environment setup and immediate reloading of the services when you make changes to your code.
-
-### Additional setup for specific AI providers
-
-- [Setting up Ollama](docs/Ollama.md)
-- [Setting up VertexAI](docs/VertexAI.md)
-- [Setting up RAG with ChromaDB](docs/RAG_Assistant.md)
-
-### Building or customizing your own agent
-
-To customize the agent for your own use case:
-
-1. Add your new agent to the `src/agents` directory. You can copy `research_assistant.py` or `chatbot.py` and modify it to change the agent's behavior and tools.
-1. Import and add your new agent to the `agents` dictionary in `src/agents/agents.py`. Your agent can be called by `/<your_agent_name>/invoke` or `/<your_agent_name>/stream`.
-1. Adjust the Streamlit interface in `src/streamlit_app.py` to match your agent's capabilities.
-
-### Handling Private Credential files
-
-If your agents or chosen LLM require file-based credential files or certificates, the `privatecredentials/` has been provided for your development convenience. All contents, excluding the `.gitkeep` files, are ignored by git and docker's build process. See [Working with File-based Credentials](docs/File_Based_Credentials.md) for suggested use.
-
-### Docker Setup
-
-This project includes a Docker setup for easy development and deployment. The `compose.yaml` file defines three services: `postgres`, `agent_service` and `streamlit_app`. The `Dockerfile` for each service is in their respective directories.
-
-For local development, we recommend using [docker compose watch](https://docs.docker.com/compose/file-watch/). This feature allows for a smoother development experience by automatically updating your containers when changes are detected in your source code.
-
-1. Make sure you have Docker and Docker Compose (>= [v2.23.0](https://docs.docker.com/compose/release-notes/#2230)) installed on your system.
-
-2. Create a `.env` file from the `.env.example`. At minimum, you need to provide an LLM API key (e.g., OPENAI_API_KEY).
-
-   ```sh
-   cp .env.example .env
-   # Edit .env to add your API keys
-   ```
-
-3. Build and launch the services in watch mode:
-
-   ```sh
-   docker compose watch
-   ```
-
-   This will automatically:
-   - Start a PostgreSQL database service that the agent service connects to
-   - Start the agent service with FastAPI
-   - Start the Streamlit app for the user interface
-
-4. The services will now automatically update when you make changes to your code:
-   - Changes in the relevant python files and directories will trigger updates for the relevant services.
-   - NOTE: If you make changes to the `pyproject.toml` or `uv.lock` files, you will need to rebuild the services by running `docker compose up --build`.
-
-5. Access the Streamlit app by navigating to `http://localhost:8501` in your web browser.
-
-6. The agent service API will be available at `http://0.0.0.0:8080`. You can also use the OpenAPI docs at `http://0.0.0.0:8080/redoc`.
-
-7. Use `docker compose down` to stop the services.
-
-This setup allows you to develop and test your changes in real-time without manually restarting the services.
-
-### Building other apps on the AgentClient
-
-The repo includes a generic `src/client/client.AgentClient` that can be used to interact with the agent service. This client is designed to be flexible and can be used to build other apps on top of the agent. It supports both synchronous and asynchronous invocations, and streaming and non-streaming requests.
-
-See the `src/run_client.py` file for full examples of how to use the `AgentClient`. A quick example:
+也可用仓库自带的 Python 客户端（`src/client/client.py`）：
 
 ```python
 from client import AgentClient
+
 client = AgentClient()
-
-response = client.invoke("Tell me a brief joke?")
-response.pretty_print()
-# ================================== Ai Message ==================================
-#
-# A man walked into a library and asked the librarian, "Do you have any books on Pavlov's dogs and Schrödinger's cat?"
-# The librarian replied, "It rings a bell, but I'm not sure if it's here or not."
-
+response = client.invoke("请总结 src 目录下有哪些模块")
+print(response)
 ```
 
-### Development with LangGraph Studio
+完整用法见 `src/run_client.py`。
 
-The agent supports [LangGraph Studio](https://langchain-ai.github.io/langgraph/concepts/langgraph_studio/), the IDE for developing agents in LangGraph.
+## Agent 配置
 
-`langgraph-cli[inmem]` is installed with `uv sync`. You can simply add your `.env` file to the root directory as described above, and then launch LangGraph Studio with `langgraph dev`. Customize `langgraph.json` as needed. See the [local quickstart](https://langchain-ai.github.io/langgraph/cloud/how-tos/studio/quick_start/#local-development-server) to learn more.
+code-assistant 的主要配置项（通过 `.env` 设置，均可选）：
 
-### Local development without Docker
+| 配置项 | 说明 |
+| --- | --- |
+| `PROJECT_ROOT` | 代码助手可读写的工作目录，所有文件访问被限制在该路径内（默认 `.`） |
+| `MAX_TOKEN_LIMIT` | 触发上下文压缩的 token 阈值（默认 8000） |
+| `CONTEXT_KEEP_RECENT_ROUNDS` | 压缩时保留的最近完整轮数（默认 6） |
+| `REDIS_URL` | 设置后记忆与 Block Rule 持久化到 Redis；留空使用内存态 |
+| `HIGH_RISK_TOOLS` | 需要人工确认的高危工具 JSON 数组 |
+| `TOOL_WHITELIST` | 允许使用的工具 JSON 数组；为空表示除高危工具外全部放行 |
+| `CONTENT_BLOCKLIST` | 工具参数中命中的关键词即拒绝（如 `sudo`、`rm -rf`） |
+| `BLOCK_RULE_SEMANTIC_CHECK` | 是否用 LLM 语义判断 Block Rule 命中（默认 true） |
+| `PLAN_MODE_MAX_SUBTASKS` / `PLAN_MODE_MAX_SUB_STEPS` / `PLAN_MODE_COMPLEXITY_THRESHOLD` | plan-mode 拆解与并行执行上限 |
+| `MCP_SERVERS_JSON` | MCP Server 配置（JSON），用于动态扩展工具 |
 
-You can also run the agent service and the Streamlit app locally without Docker, just using a Python virtual environment.
+详细设计、工具清单与模块职责见 [docs/Code_Assistant.md](docs/Code_Assistant.md)，完整环境变量见 [.env.example](.env.example)。
 
-1. Create a virtual environment and install dependencies:
+支持多种模型提供商：OpenAI、Azure OpenAI、DeepSeek、Anthropic、Google Gemini、Groq、OpenRouter、AWS Bedrock、Vertex AI、Ollama 以及任意 OpenAI 兼容接口。设置 `DEFAULT_MODEL` 可指定默认模型；未设置时按已配置的提供商自动选择。
 
-   ```sh
-   uv sync --frozen
-   source .venv/bin/activate
-   ```
+## LLM 之外的配置
 
-2. Run the FastAPI server:
+- 历史会话与记忆的数据库后端：`DATABASE_TYPE=sqlite|postgres|mongo`（默认 SQLite），相关连接参数见 `.env.example`；
+- 语音输入/输出：在 Streamlit 客户端配置 `VOICE_STT_PROVIDER=openai` 与 `VOICE_TTS_PROVIDER=openai`（需 `OPENAI_API_KEY`）；
+- AG-UI 协议说明见 [docs/AGUI.md](docs/AGUI.md)；
+- 本地模型（Ollama）与 Vertex AI 配置见 [docs/Ollama.md](docs/Ollama.md) 与 [docs/VertexAI.md](docs/VertexAI.md)；
+- 文件型私有凭证的使用建议见 [docs/File_Based_Credentials.md](docs/File_Based_Credentials.md)（`privatecredentials/` 目录内容默认被 Git 与 Docker 忽略）。
 
-   ```sh
-   python src/run_service.py
-   ```
+## 目录结构
 
-3. In a separate terminal, run the Streamlit app:
+```text
+local-copilot/
+├── src/
+│   ├── agents/code_assistant/   # code-assistant agent（主图、代码工具、安全网关、记忆、规划）
+│   ├── agents/agents.py         # agent 注册表（默认 code-assistant）
+│   ├── core/                    # 设置与 LLM 工厂
+│   ├── schema/                  # 协议数据模型
+│   ├── service/                 # FastAPI 服务（含 AG-UI、线程管理）
+│   ├── client/                  # AgentClient 客户端
+│   ├── streamlit_app.py         # Streamlit 聊天界面
+│   └── run_service.py           # 服务启动入口
+├── tests/                       # 单元与集成测试
+├── docker/ + compose.yaml       # Docker 部署
+├── docs/                        # 文档
+└── pyproject.toml
+```
 
-   ```sh
-   streamlit run src/streamlit_app.py
-   ```
-
-4. Open your browser and navigate to the URL provided by Streamlit (usually `http://localhost:8501`).
-
-## Projects built with or inspired by local-copilot
-
-The following are a few of the public projects that drew code or inspiration from this repo.
-
-- **[PolyRAG](https://github.com/QuentinFuxa/PolyRAG)** - Extends local-copilot with RAG capabilities over both PostgreSQL databases and PDF documents.
-- **[alexrisch/agent-web-kit](https://github.com/alexrisch/agent-web-kit)** - A Next.JS frontend for local-copilot
-- **[raushan-in/dapa](https://github.com/raushan-in/dapa)** - Digital Arrest Protection App (DAPA) enables users to report financial scams and frauds efficiently via a user-friendly platform.
-
-**Please create a pull request editing the README or open a discussion with any new ones to be added!** Would love to include more projects.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-**A note on how this repo is maintained:** this is a solo-maintainer project, and issues, PRs, and discussions are triaged on a roughly biweekly cycle with help from an AI maintenance agent. Thanks for your patience if responses take a week or two — I will do my best to respond to truly urgent issues (vulnerability reports, etc.) or in-progress PRs within a few days. The full automation playbooks are versioned in [`docs/maintenance/`](docs/maintenance/) if you're curious how it works.
-
-Currently the tests need to be run using the local development without Docker setup. To run the tests for the agent service:
-
-1. Ensure you're in the project root directory and have activated your virtual environment.
-
-2. Install the development dependencies and pre-commit hooks:
-
-   ```sh
-   uv sync --frozen
-   pre-commit install
-   ```
-
-3. Run the tests using pytest:
-
-   ```sh
-   pytest
-   ```
-
-### Smoke testing optional dependencies
-
-Some integrations aren't exercised by the unit suite or the default CI run because they
-need real infrastructure: the Postgres and MongoDB checkpointers, the AG-UI endpoint, and
-LangFuse tracing. `scripts/smoke_test.sh` spins up each dependency in Docker, runs the
-service against it, verifies the integration end-to-end (including a check that the
-intended backend was actually used, not a silent SQLite fallback), and tears it down.
+## 测试
 
 ```sh
-./scripts/smoke_test.sh                 # default: postgres, mongo, agui
-./scripts/smoke_test.sh mongo           # a single target
-./scripts/smoke_test.sh langfuse        # heavy: starts LangFuse's full self-host stack
-./scripts/smoke_test.sh all             # everything, including langfuse
+uv sync --frozen
+pre-commit install
+pytest
 ```
 
-These are opt-in confidence checks for a maintainer or agent — not part of CI. Run the
-target that matches what you changed rather than the whole set. The optional add-on
-compose files live in `docker/` (e.g. `docker/compose.mongo.yaml`), layered on top of the
-default `compose.yaml` so the default stack stays lightweight.
+代码助手专项测试：
+
+```sh
+uv run pytest tests/agents/test_code_assistant.py
+```
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+本项目基于 MIT License 开源，详见 [LICENSE](LICENSE)。
