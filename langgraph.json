@@ -1,0 +1,8 @@
+{
+    "python_version": "3.12",
+    "dependencies": ["./src"],
+    "graphs": {
+        "code_assistant": "./src/agents/code_assistant/assistant.py:code_assistant"
+    },
+    "env": "./.env"
+}
